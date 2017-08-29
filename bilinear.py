@@ -12,9 +12,6 @@ channels = 96
 feature_height = 72
 feature_width = 56
 
-# original feature map
-grid = tf.random_normal(shape=(batch_size, channels, feature_height, feature_width), seed=11111)
-
 def lrelu(x, leak=0.2, name='lrelu'):
 	with tf.variable_scope(name):
 		f1 = 0.5 * (1 + leak)
@@ -40,29 +37,39 @@ def batch_bilinear(x, coords_w, coords_h):
 	# coords_h: [ batch_size, channels, height ]
 	x_shape = x.get_shape().as_list()
 
-	coords_w = tf.tile(tf.expand_dims(coords_w, 2), [1, 1, x_shape[2], 1])
-	coords_h = tf.tile(tf.expand_dims(coords_h, 3), [1, 1, 1, x_shape[3]])
+	# idx__ : [ batch_size, channels, _, 2 ], 2 = (#batch, #channel)
+	idx = tf.expand_dims(tf.stack(tf.meshgrid(tf.range(x_shape[1]), tf.range(x_shape[0])),-1), 2)
+	idx_h = tf.tile(idx, [1, 1, x_shape[2], 1])
+	idx_w = tf.tile(idx, [1, 1, x_shape[3], 1])
 
-	coords__0 = tf.cast(tf.floor(coords_w), tf.int32)
-	coords__1 = tf.cast(tf.ceil(coords_w), tf.int32)
-	coords_0_ = tf.cast(tf.floor(coords_h), tf.int32)
-	coords_1_ = tf.cast(tf.ceil(coords_h), tf.int32)
+	coords_0_ = tf.concat([idx_h, tf.expand_dims(tf.cast(tf.floor(coords_h), tf.int32), -1)], -1)
+	coords_1_ = tf.concat([idx_h, tf.expand_dims(tf.cast(tf.ceil(coords_h), tf.int32), -1)], -1)
+	coords__0 = tf.concat([idx_w, tf.expand_dims(tf.cast(tf.floor(coords_w), tf.int32), -1)], -1)
+	coords__1 = tf.concat([idx_w, tf.expand_dims(tf.cast(tf.ceil(coords_w), tf.int32), -1)], -1)
 
-	f_00 = 
+	vals_0_ = tf.matrix_transpose(tf.gather_nd(x, coords_0_))
+	vals_1_ = tf.matrix_transpose(tf.gather_nd(x, coords_1_))
 
-# 	coords_lt = tf.cast(tf.floor(coords), 'int32')
-# 	coords_rb = tf.cast(tf.ceil(coords), 'int32')
-# 	coords_lb = tf.stack([coords_lt[:, 0], coords_rb[:, 1]], axis=1)
-# 	coords_rt = tf.stack([coords_rb[:, 0], coords_lt[:, 1]], axis=1)
+	vals_00 = tf.gather_nd(vals_0_, coords__0)
+	vals_01 = tf.gather_nd(vals_0_, coords__1)
+	vals_10 = tf.gather_nd(vals_1_, coords__0)
+	vals_11 = tf.gather_nd(vals_1_, coords__1)
 
-# 	vals_lt = tf.gather_nd(input, coords_lt)
-# 	vals_rb = tf.gather_nd(input, coords_rb)
-# 	vals_lb = tf.gather_nd(input, coords_lb)
-# 	vals_rt = tf.gather_nd(input, coords_rt)
+	# coords_w = tf.tile(tf.expand_dims(coords_w, 2), [1, 1, x_shape[2], 1])
+	# coords_h = tf.tile(tf.expand_dims(coords_h, 3), [1, 1, 1, x_shape[3]])
+	coords_x = tf.expand_dims(coords_w - tf.floor(coords_w), 3)
+	coords_y = tf.expand_dims(coords_h - tf.floor(coords_h), 2)
 
-	return
-	
+	vals = vals_00 + \
+				 (vals_10 - vals_00) * coords_x + \
+				 (vals_01 - vals_00) * coords_y + \
+				 (vals_11 + vals_00 - vals_10 - vals_01) * coords_x * coords_y
 
+	return vals
+
+
+# original feature map
+grid = tf.random_normal(shape=(batch_size, channels, feature_height, feature_width), seed=11111)
 
 weights_w = tf.reduce_sum(cl.conv2d(grid, num_outputs=channels, kernel_size=[1, 7], stride=1, 
 											activation_fn=tf.nn.relu, padding='SAME', data_format='NCHW'), axis=2)
@@ -72,46 +79,40 @@ weights_h = tf.reduce_sum(cl.conv2d(grid, num_outputs=channels, kernel_size=[7, 
 coords_w = weights_to_coords(weights_w)
 coords_h = weights_to_coords(weights_h)
 
+x_shape = grid.get_shape().as_list()
+
+# idx__ : [ batch_size, channels, _, 2 ], 2 = (#batch, #channel)
+mesh = tf.meshgrid(tf.range(x_shape[1]), tf.range(x_shape[0]))
+idx = tf.expand_dims(tf.stack([mesh[1], mesh[0]],-1), 2)
+idx_h = tf.tile(idx, [1, 1, x_shape[2], 1])
+idx_w = tf.tile(idx, [1, 1, x_shape[3], 1])
+
+coords_0_ = tf.concat([idx_h, tf.expand_dims(tf.cast(tf.floor(coords_h), tf.int32), -1)], -1)
+coords_1_ = tf.concat([idx_h, tf.expand_dims(tf.cast(tf.ceil(coords_h), tf.int32), -1)], -1)
+coords__0 = tf.concat([idx_w, tf.expand_dims(tf.cast(tf.floor(coords_w), tf.int32), -1)], -1)
+coords__1 = tf.concat([idx_w, tf.expand_dims(tf.cast(tf.ceil(coords_w), tf.int32), -1)], -1)
+
+vals_0_ = tf.matrix_transpose(tf.gather_nd(grid, coords_0_))
+vals_1_ = tf.matrix_transpose(tf.gather_nd(grid, coords_1_))
+
+vals_00 = tf.gather_nd(vals_0_, coords__0)
+vals_01 = tf.gather_nd(vals_0_, coords__1)
+vals_10 = tf.gather_nd(vals_1_, coords__0)
+vals_11 = tf.gather_nd(vals_1_, coords__1)
+
+# coords_w = tf.tile(tf.expand_dims(coords_w, 2), [1, 1, x_shape[2], 1])
+# coords_h = tf.tile(tf.expand_dims(coords_h, 3), [1, 1, 1, x_shape[3]])
+coords_x = tf.expand_dims(coords_w - tf.floor(coords_w), 3)
+coords_y = tf.expand_dims(coords_h - tf.floor(coords_h), 2)
+
+vals = vals_00 + \
+			 (vals_10 - vals_00) * coords_x + \
+			 (vals_01 - vals_00) * coords_y + \
+			 (vals_11 + vals_00 - vals_10 - vals_01) * coords_x * coords_y
+
+
 sess = tf.Session()
 sess.run(tf.global_variables_initializer())
+kkk = sess.run(vals)
+print (kkk)
 
-# print (sess.run(coords_x)[0][0])
-
-# def tf_map_coordinates(input, coords, order=1):
-# 	"""Tensorflow verion of scipy.ndimage.map_coordinates
-
-# 	Note that coords is transposed and only 2D is supported
-
-# 	Parameters
-# 	----------
-# 	input : tf.Tensor. shape = (s, s)
-# 	coords : tf.Tensor. shape = (n_points, 2)
-# 	"""
-
-# 	assert order == 1
-
-# 	coords_lt = tf.cast(tf.floor(coords), 'int32')
-# 	coords_rb = tf.cast(tf.ceil(coords), 'int32')
-# 	coords_lb = tf.stack([coords_lt[:, 0], coords_rb[:, 1]], axis=1)
-# 	coords_rt = tf.stack([coords_rb[:, 0], coords_lt[:, 1]], axis=1)
-
-# 	vals_lt = tf.gather_nd(input, coords_lt)
-# 	vals_rb = tf.gather_nd(input, coords_rb)
-# 	vals_lb = tf.gather_nd(input, coords_lb)
-# 	vals_rt = tf.gather_nd(input, coords_rt)
-
-# 	coords_offset_lt = coords - tf.cast(coords_lt, 'float32')
-# 	vals_t = vals_lt + (vals_rt - vals_lt) * coords_offset_lt[:, 0]
-# 	vals_b = vals_lb + (vals_rb - vals_lb) * coords_offset_lt[:, 0]
-# 	mapped_vals = vals_t + (vals_b - vals_t) * coords_offset_lt[:, 1]
-
-# 	return mapped_vals
-
-# test_input = grid[0][0]
-# grad_input = tf.random_uniform(shape=[100], seed=123)
-# test_coords = tf.random_uniform(shape=[100, 2], seed=1234)
-
-# a = tf_map_coordinates(test_input, test_coords)
-# b = tf.gradients(a, test_coords, grad_ys=grad_input)
-
-# print (sess.run(b))
