@@ -11,7 +11,8 @@ def weights_to_coords(x):
 	x = tf.expand_dims(x, -1)
 	x = tf.tile(x, multiples=[1, 1, 1, size])
 	x = tf.matrix_band_part(x, 0, -1) # upper triangular part of x
-	x = tf.reduce_sum(x, axis=2) - y/2.0
+	x = tf.reduce_sum(x, axis=2) - y
+	x = tf.stop_gradient(x) + y/2.0
 	return x
 
 def batch_bilinear(x, weights_w, weights_h):
@@ -52,7 +53,7 @@ def batch_bilinear(x, weights_w, weights_h):
 
 	return vals
 
-def gridconv2d( x, name,
+def gridconv2d( x, scope,
 								num_outputs, kernel_size, stride=1, length=7,
 								activation_fn=tf.nn.relu, padding='SAME', data_format='NCHW',
 								normalizer_fn=None, normalizer_params=None,
@@ -60,16 +61,30 @@ def gridconv2d( x, name,
 	# The network is built based on 'NCHW'.
 	x_shape = x.get_shape().as_list()
 
-	with tf.variable_scope(name):
-		weights_w = tf.reduce_sum(cl.conv2d(x, num_outputs=x_shape[1], kernel_size=[1, length], stride=1, 
-													activation_fn=tf.nn.relu, padding='SAME', data_format='NCHW'), axis=2)
-		weights_h = tf.reduce_sum(cl.conv2d(x, num_outputs=x_shape[1], kernel_size=[length, 1], stride=1,
-													activation_fn=tf.nn.relu, padding='SAME', data_format='NCHW'), axis=3)
+	with tf.variable_scope(scope):
+		# weights_w = tf.reduce_sum(cl.conv2d(x, num_outputs=x_shape[1], kernel_size=[1, length], stride=1, 
+		# 											activation_fn=tf.abs, padding='SAME', data_format='NCHW', 
+		# 											normalizer_fn=normalizer_fn, normalizer_params=normalizer_params, 
+		# 											scope='_W'), axis=2)
+		# weights_h = tf.reduce_sum(cl.conv2d(x, num_outputs=x_shape[1], kernel_size=[length, 1], stride=1,
+		# 											activation_fn=tf.abs, padding='SAME', data_format='NCHW', 
+		# 											normalizer_fn=normalizer_fn, normalizer_params=normalizer_params,
+		# 											scope='_H'), axis=3)
+
+		weights = cl.conv2d(x, num_outputs=x_shape[1], kernel_size=[3, 3], stride=1,
+													activation_fn=tf.nn.sigmoid, padding='SAME', data_format='NCHW', 
+													normalizer_fn=normalizer_fn, normalizer_params=normalizer_params,
+													scope='_W')
+		weights_w = tf.reduce_sum(weights, axis=2)
+		weights_h = tf.reduce_sum(weights, axis=3)
+
+		# weights_w = tf.Print(weights_w, [weights_w], summarize=32)
+		tf.add_to_collection('70f92c137c01d89c6477c5ef22411bfe', [weights_w, weights_h])
 
 		x = batch_bilinear(x, weights_w, weights_h)
 		x = cl.conv2d(x, num_outputs=num_outputs, kernel_size=kernel_size, stride=stride,
 									activation_fn=activation_fn, padding=padding,
 									normalizer_fn=normalizer_fn, normalizer_params=normalizer_params,
-									weights_initializer=weights_initializer, data_format='NCHW')
+									weights_initializer=weights_initializer, data_format='NCHW', scope='Main')
 
 		return x
