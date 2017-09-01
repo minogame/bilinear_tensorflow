@@ -7,7 +7,7 @@ import re
 
 import tensorflow as tf
 import tensorflow.contrib.layers as cl
-from model import normal_cnn_cifar, trash_cnn_cifar
+from model import resnet
 
 # Data loading and preprocessing
 import tflearn
@@ -20,7 +20,7 @@ X_test = np.transpose(X_test, [0,3,1,2])
 Y_test = to_categorical(Y_test, 10)
 
 # cnn = normal_cnn_cifar
-cnn = trash_cnn_cifar
+cnn = resnet('resnet', 5, grid=True)
 WEIGHT_DECAY = 1e-4
 l2 = cl.l2_regularizer(WEIGHT_DECAY)
 batch_size = 100
@@ -35,11 +35,12 @@ with tf.Graph().as_default():
 	def aug_image(x):
 		x = tf.pad(x, [[0, 0], [0, 0], [4, 4], [4, 4]])
 		x = tf.random_crop(x, [batch_size, 3, 32, 32])
+		x = tf.map_fn(lambda img: tf.image.random_flip_left_right(img), x)
 		return x
 
 	XX = tf.cond(is_training, lambda: aug_image(X), lambda: X)
 
-	logits = cnn(XX, name=cnn.__name__, is_training=is_training)
+	logits = cnn(XX, is_training=is_training)
 
 	clf_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=Y))
 
