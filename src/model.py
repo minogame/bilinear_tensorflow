@@ -1,7 +1,7 @@
 import tensorflow as tf
 import tensorflow.contrib.layers as cl
 
-from gridconv import gridconv2d
+from gridconv_v3 import gridconv2d
 
 # # # # # # # # # CIFAR # # # # # # # # #
 
@@ -148,36 +148,36 @@ def grid_residual(name, l, is_training, increase_dim=False, first=False, one_c=F
 		l = c2 + l
 		return l
 
-def resnet(name, n):
-	def cnn(x, is_training):
-		bn_params = {'is_training':is_training, 'fused': True, 'data_format': 'NCHW'}
-		with tf.variable_scope(name) as scope:
-			l = cl.conv2d(x, num_outputs=16, kernel_size=[3, 3], stride=1, 
-										activation_fn=tf.nn.relu, padding='SAME', data_format='NCHW',
-										normalizer_fn=cl.batch_norm, normalizer_params=bn_params,
-										scope='conv0')
-			l = tf.nn.relu(cl.batch_norm(l, is_training=is_training, fused=True, data_format='NCHW'))
-			l = residual('res1.0', l, is_training, first=True)
-			for k in range(1, n):
-				l = residual('res1.{}'.format(k), l, is_training)
-			# 32,c=16
+# def resnet(name, n):
+# 	def cnn(x, is_training):
+# 		bn_params = {'is_training':is_training, 'fused': True, 'data_format': 'NCHW'}
+# 		with tf.variable_scope(name) as scope:
+# 			l = cl.conv2d(x, num_outputs=16, kernel_size=[3, 3], stride=1, 
+# 										activation_fn=tf.nn.relu, padding='SAME', data_format='NCHW',
+# 										normalizer_fn=cl.batch_norm, normalizer_params=bn_params,
+# 										scope='conv0')
+# 			l = tf.nn.relu(cl.batch_norm(l, is_training=is_training, fused=True, data_format='NCHW'))
+# 			l = residual('res1.0', l, is_training, first=True)
+# 			for k in range(1, n):
+# 				l = residual('res1.{}'.format(k), l, is_training)
+# 			# 32,c=16
 
-			l = grid_residual('res2.0', l, is_training, increase_dim=True)
-			for k in range(1, n):
-				l = grid_residual('res2.{}'.format(k), l, is_training)
-			# 16,c=32
+# 			l = grid_residual('res2.0', l, is_training, increase_dim=True)
+# 			for k in range(1, n):
+# 				l = grid_residual('res2.{}'.format(k), l, is_training)
+# 			# 16,c=32
 
-			l = grid_residual('res3.0', l, is_training, increase_dim=True)
-			for k in range(1, n):
-				l = grid_residual('res3.' + str(k), l, is_training)
-			l = tf.nn.relu(cl.batch_norm(l, is_training=is_training, fused=True, data_format='NCHW'))
-			# 8,c=64
-			l = tf.reduce_mean(l, [2, 3])
+# 			l = grid_residual('res3.0', l, is_training, increase_dim=True)
+# 			for k in range(1, n):
+# 				l = grid_residual('res3.' + str(k), l, is_training)
+# 			l = tf.nn.relu(cl.batch_norm(l, is_training=is_training, fused=True, data_format='NCHW'))
+# 			# 8,c=64
+# 			l = tf.reduce_mean(l, [2, 3])
 
-			l = cl.fully_connected(l, num_outputs=10, activation_fn=None)
+# 			l = cl.fully_connected(l, num_outputs=10, activation_fn=None)
 
-			return l
-	return cnn
+# 			return l
+# 	return cnn
 
 def resnet(name, n, grid=False):
 	def cnn(x, is_training):
@@ -209,7 +209,7 @@ def resnet(name, n, grid=False):
 
 			return l
 
-	def gridcnn_c(x, is_training):
+	def gridcnn_c3_sp(x, is_training):
 		bn_params = {'is_training':is_training, 'fused': True, 'data_format': 'NCHW'}
 		with tf.variable_scope(name) as scope:
 			l = cl.conv2d(x, num_outputs=16, kernel_size=[3, 3], stride=1, 
@@ -222,14 +222,14 @@ def resnet(name, n, grid=False):
 				l = residual('res1.{}'.format(k), l, is_training)
 			# 32,c=16
 
-			l = grid_residual('res2.0', l, is_training, increase_dim=True, one_c=True)
+			l = residual('res2.0', l, is_training, increase_dim=True)
 			for k in range(1, n):
-				l = grid_residual('res2.{}'.format(k), l, is_training, one_c=True)
+				l = grid_residual('res2.{}'.format(k), l, is_training, one_c=False)
 			# 16,c=32
 
-			l = grid_residual('res3.0', l, is_training, increase_dim=True, one_c=True)
+			l = residual('res3.0', l, is_training, increase_dim=True)
 			for k in range(1, n):
-				l = grid_residual('res3.{}'.format(k), l, is_training, one_c=True)
+				l = grid_residual('res3.{}'.format(k), l, is_training, one_c=False)
 			l = tf.nn.relu(cl.batch_norm(l, is_training=is_training, fused=True, data_format='NCHW'))
 			# 8,c=64
 			l = tf.reduce_mean(l, [2, 3])
@@ -237,5 +237,5 @@ def resnet(name, n, grid=False):
 			l = cl.fully_connected(l, num_outputs=10, activation_fn=None)
 
 			return l
-	return gridcnn_c if grid else cnn
+	return gridcnn_c3_sp if grid else cnn
 

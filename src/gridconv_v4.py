@@ -57,7 +57,7 @@ def batch_bilinear(x, weights_w, weights_h):
 def gridconv2d( x, scope,
 								num_outputs, kernel_size, stride=1, length=5,
 								activation_fn=tf.nn.relu, padding='SAME', data_format='NCHW',
-								normalizer_fn=None, normalizer_params=None, one_c=False,
+								normalizer_fn=None, normalizer_params=None, one_c=True,
 								weights_initializer=cl.variance_scaling_initializer()):
 	# The network is built based on 'NCHW'.
 	x_shape = x.get_shape().as_list()
@@ -73,12 +73,23 @@ def gridconv2d( x, scope,
 		# 											#normalizer_fn=normalizer_fn, normalizer_params=normalizer_params,
 		# 											scope='_H'), axis=3)
 
-		weights = cl.conv2d(x, num_outputs=c, kernel_size=[3, 3], stride=1,
-													activation_fn=tf.nn.sigmoid, padding='SAME', data_format='NCHW', 
-													normalizer_fn=normalizer_fn, normalizer_params=normalizer_params,
-													scope='_W')
-		weights_w = tf.reduce_sum(weights, axis=2)
-		weights_h = tf.reduce_sum(weights, axis=3)
+		# weights = cl.conv2d(x, num_outputs=c, kernel_size=[3, 3], stride=1,
+		# 											activation_fn=tf.nn.sigmoid, padding='SAME', data_format='NCHW', 
+		# 											normalizer_fn=normalizer_fn, normalizer_params=normalizer_params,
+		# 											scope='_W')
+		x_t = tf.transpose(x, [0, 2, 3, 1])
+		patch_w = tf.extract_image_patches(x_t, ksizes=[1, 1, length, 1], strides=[1, 1, 1, 1], rates=[1, 1, 1, 1], padding='SAME')
+		patch_h = tf.extract_image_patches(x_t, ksizes=[1, length, 1, 1], strides=[1, 1, 1, 1], rates=[1, 1, 1, 1], padding='SAME')
+
+		mean_w, var_w = tf.nn.moments(patch_w, [3])
+		mean_h, var_h = tf.nn.moments(patch_h, [3])
+
+		weights_w = tf.reciprocal(tf.expand_dims(tf.reduce_mean(var_w, axis=1), 1))
+		weights_h = tf.reciprocal(tf.expand_dims(tf.reduce_mean(var_h, axis=2), 1))
+
+
+		# weights_w = tf.reciprocal(tf.reduce_sum(weights, axis=2))
+		# weights_h = tf.reciprocal(tf.reduce_sum(weights, axis=3))
 
 		if one_c:
 			weights_w = tf.tile(weights_w, [1, x_shape[1], 1])
@@ -88,42 +99,10 @@ def gridconv2d( x, scope,
 		# tf.add_to_collection('70f92c137c01d89c6477c5ef22411bfe', [weights_w, weights_h])
 
 		x = batch_bilinear(x, weights_w, weights_h)
+
 		x = cl.conv2d(x, num_outputs=num_outputs, kernel_size=kernel_size, stride=stride,
 									activation_fn=activation_fn, padding=padding,
 									normalizer_fn=normalizer_fn, normalizer_params=normalizer_params,
 									weights_initializer=weights_initializer, data_format='NCHW', scope='Main')
 
 		return x
-
-# def gridconv2d( scope, x, 
-# 								num_outputs, kernel_size=[3, 3], stride=1, length=7,
-# 								activation_fn=tf.identity, padding='SAME', data_format='NCHW'):
-# 	# The network is built based on 'NCHW'.
-# 	x_shape = x.get_shape().as_list()
-
-# 	with tf.variable_scope(scope):
-# 		# weights_w = tf.reduce_sum(cl.conv2d(x, num_outputs=x_shape[1], kernel_size=[1, length], stride=1, 
-# 		# 											activation_fn=tf.abs, padding='SAME', data_format='NCHW', 
-# 		# 											normalizer_fn=normalizer_fn, normalizer_params=normalizer_params, 
-# 		# 											scope='_W'), axis=2)
-# 		# weights_h = tf.reduce_sum(cl.conv2d(x, num_outputs=x_shape[1], kernel_size=[length, 1], stride=1,
-# 		# 											activation_fn=tf.abs, padding='SAME', data_format='NCHW', 
-# 		# 											normalizer_fn=normalizer_fn, normalizer_params=normalizer_params,
-# 		# 											scope='_H'), axis=3)
-
-# 		# weights = cl.conv2d(x, num_outputs=x_shape[1], kernel_size=[3, 3], stride=1,
-# 		# 											activation_fn=tf.nn.sigmoid, padding='SAME', data_format='NCHW', 
-# 		# 											normalizer_fn=normalizer_fn, normalizer_params=normalizer_params,
-# 		# 											scope='_W')
-
-# 		weights = Conv2D('conv_W', x, x_shape[1], kernel_shape=[3,3], stride=1, nl=tf.sigmoid, data_format='NCHW')
-# 		weights_w = tf.reduce_sum(weights, axis=2)
-# 		weights_h = tf.reduce_sum(weights, axis=3)
-
-# 		x = batch_bilinear(x, weights_w, weights_h)
-# 		# x = cl.conv2d(x, num_outputs=num_outputs, kernel_size=kernel_size, stride=stride,
-# 		# 							activation_fn=activation_fn, padding=padding,
-# 		# 							normalizer_fn=normalizer_fn, normalizer_params=normalizer_params,
-# 		# 							weights_initializer=weights_initializer, data_format='NCHW', scope='Main')
-# 		x = Conv2D('conv_M', x, num_outputs, kernel_shape=kernel_size, stride=stride, nl=activation_fn, data_format='NCHW')
-# 		return x

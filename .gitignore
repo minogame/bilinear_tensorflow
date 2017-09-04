@@ -103,3 +103,4 @@ log/
 ckpt/
 cifar-10-batches-py/
 ref/
+npy/
