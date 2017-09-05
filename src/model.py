@@ -209,7 +209,7 @@ def resnet(name, n, grid=False):
 
 			return l
 
-	def gridcnn_c3_sp(x, is_training):
+	def gridcnn_c5(x, is_training):
 		bn_params = {'is_training':is_training, 'fused': True, 'data_format': 'NCHW'}
 		with tf.variable_scope(name) as scope:
 			l = cl.conv2d(x, num_outputs=16, kernel_size=[3, 3], stride=1, 
@@ -237,5 +237,5 @@ def resnet(name, n, grid=False):
 			l = cl.fully_connected(l, num_outputs=10, activation_fn=None)
 
 			return l
-	return gridcnn_c3_sp if grid else cnn
+	return gridcnn_c5 if grid else cnn
 

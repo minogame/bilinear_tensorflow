@@ -76,7 +76,7 @@ def gridconv2d( x, scope,
 		weights = cl.conv2d(x, num_outputs=c, kernel_size=[3, 3], stride=1,
 													activation_fn=tf.nn.sigmoid, padding='SAME', data_format='NCHW', 
 													normalizer_fn=normalizer_fn, normalizer_params=normalizer_params,
-													scope='_W')
+													scope='GRID')
 		# weights_w = tf.reciprocal(tf.reduce_sum(weights, axis=2))
 		# weights_h = tf.reciprocal(tf.reduce_sum(weights, axis=3))
 		weights_w = tf.reduce_sum(weights, axis=2)
@@ -93,6 +93,6 @@ def gridconv2d( x, scope,
 		x = cl.conv2d(x, num_outputs=num_outputs, kernel_size=kernel_size, stride=stride,
 									activation_fn=activation_fn, padding=padding,
 									normalizer_fn=normalizer_fn, normalizer_params=normalizer_params,
-									weights_initializer=weights_initializer, data_format='NCHW', scope='Main')
+									weights_initializer=weights_initializer, data_format='NCHW', scope='MAIN')
 
 		return x

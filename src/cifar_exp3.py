@@ -57,12 +57,17 @@ with tf.Graph().as_default():
 	coords_w = coords_check[0][0]
 	coords_h = coords_check[0][1]
 
-	
+	grid_weights = []
+	for v in tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES):
+		if re.search('GRID', v.name):
+			grid_weights.append(v)
+	convbn_weights = [v for v in tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES) if v not in grid_weights]
 
 	opt = tf.train.MomentumOptimizer(learning_rate=lr, momentum=0.9, use_nesterov=True)
 	update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
 	with tf.control_dependencies(update_ops):
-		train_op = opt.minimize(loss)
+		train_op_conv = opt.minimize(loss, var_list=convbn_weights)
+		train_op_grid = opt.minimize(loss, var_list=grid_weights)
 
 	accuracy = tf.reduce_mean(
 			tf.cast(tf.equal(tf.argmax(logits, 1), tf.argmax(Y, 1)), tf.float32),
@@ -96,18 +101,21 @@ with tf.Graph().as_default():
 			for i in range(total_batch):
 				batch_xs, batch_ys = cifar10_X[batch_size*i:batch_size*(i+1)], cifar10_Y[batch_size*i:batch_size*(i+1)]
 
-				if i % 499 == 0:
-					merged, _, cost, _cw, _ch = sess.run([merged_all, train_op, clf_loss, coords_w, coords_h], feed_dict={X: batch_xs, Y: batch_ys, is_training: True})
+				if i % 100 == 0:
+					merged, _, cost, _cw, _ch = sess.run([merged_all, train_op_conv, clf_loss, coords_w, coords_h], feed_dict={X: batch_xs, Y: batch_ys, is_training: True})
 					iters = i + epoch*total_batch
 					summary_writer.add_summary(merged, iters)
 					summary_writer.add_run_metadata(run_metadata, 'metadata {}'.format(iters), iters)
 					print("Epoch:", '%03d' % (epoch+1), "Step:", '%03d' % i, "Loss:", str(cost))
-					np.save(npy_dir+'{}_{}_w'.format(epoch, i), _cw)
-					np.save(npy_dir+'{}_{}_h'.format(epoch, i), _ch)
-					np.save(npy_dir+'{}_{}_i'.format(epoch, i), batch_xs)
+					if i % 499 == 0:
+						np.save(npy_dir+'{}_{}_w'.format(epoch, i), _cw)
+						np.save(npy_dir+'{}_{}_h'.format(epoch, i), _ch)
+						np.save(npy_dir+'{}_{}_i'.format(epoch, i), batch_xs)
+					sess.run(train_op_grid, feed_dict={X: batch_xs, Y: batch_ys, is_training: True})
 
 				else:
-					sess.run(train_op, feed_dict={X: batch_xs, Y: batch_ys, is_training: True})
+					sess.run(train_op_conv, feed_dict={X: batch_xs, Y: batch_ys, is_training: True})
+					sess.run(train_op_grid, feed_dict={X: batch_xs, Y: batch_ys, is_training: True})
 
 			for j in range(100):
 				batch_xs, batch_ys = X_test[100*j:100*(j+1)], Y_test[100*j:100*(j+1)]
