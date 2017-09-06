@@ -2,11 +2,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 import cv2, itertools, os
 
-npy_dir = 'npy/trash_cnn_cifar/'
+npy_dir = 'npy/cnn_cifarf/'
 fig_dir = npy_dir+'fig/'
 if not os.path.exists(fig_dir): os.makedirs(fig_dir)
 
-epoch_step = '39_499_'
+epoch_step = '9_499_'
 w = np.load(npy_dir + epoch_step + 'w.npy')
 h = np.load(npy_dir + epoch_step + 'h.npy')
 i = np.load(npy_dir + epoch_step + 'i.npy')

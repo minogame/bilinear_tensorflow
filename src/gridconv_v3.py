@@ -65,29 +65,59 @@ def gridconv2d( x, scope,
 
 	with tf.variable_scope(scope):
 		# weights_w = tf.reduce_sum(cl.conv2d(x, num_outputs=c, kernel_size=[1, length], stride=1, 
-		# 											activation_fn=tf.nn.sigmoid, padding='SAME', data_format='NCHW', 
+		# 											padding='SAME', data_format='NCHW', 
+		# 											# activation_fn=tf.nn.sigmoid, 
 		# 											#normalizer_fn=normalizer_fn, normalizer_params=normalizer_params, 
-		# 											scope='_W'), axis=2)
+		# 											scope='GRID_W'), axis=2)
 		# weights_h = tf.reduce_sum(cl.conv2d(x, num_outputs=c, kernel_size=[length, 1], stride=1,
-		# 											activation_fn=tf.nn.sigmoid, padding='SAME', data_format='NCHW', 
+		# 											padding='SAME', data_format='NCHW', 
+		# 											# activation_fn=tf.nn.sigmoid, 
 		# 											#normalizer_fn=normalizer_fn, normalizer_params=normalizer_params,
-		# 											scope='_H'), axis=3)
+		# 											scope='GRID_H'), axis=3)
 
 		weights = cl.conv2d(x, num_outputs=c, kernel_size=[3, 3], stride=1,
-													activation_fn=tf.nn.sigmoid, padding='SAME', data_format='NCHW', 
-													normalizer_fn=normalizer_fn, normalizer_params=normalizer_params,
+													padding='SAME', data_format='NCHW', biases_initializer=None,
+													weights_initializer=tf.truncated_normal_initializer(stddev=0.0002),
+													activation_fn=tf.identity, 
+													# normalizer_fn=normalizer_fn, normalizer_params=normalizer_params,
 													scope='GRID')
+		# weights = tf.Print(weights, [weights], summarize=20)
+		# weights = cl.batch_norm(weights, **normalizer_params)
+		# weights = tf.nn.sigmoid(weights)
+
+		tf.summary.histogram(name=weights.name, values=weights)
+
 		# weights_w = tf.reciprocal(tf.reduce_sum(weights, axis=2))
 		# weights_h = tf.reciprocal(tf.reduce_sum(weights, axis=3))
 		weights_w = tf.reduce_sum(weights, axis=2)
 		weights_h = tf.reduce_sum(weights, axis=3)
+
+		tf.summary.histogram(name=weights_w.name, values=weights_w)
+		tf.summary.histogram(name=weights_h.name, values=weights_h)
+
+		# w_min = tf.reduce_min(weights_w, axis=2, keep_dims=True) - 0.01
+		# w_max = tf.reduce_max(weights_w, axis=2, keep_dims=True) + 0.01
+
+		# h_min = tf.reduce_min(weights_h, axis=2, keep_dims=True) - 0.01
+		# h_max = tf.reduce_max(weights_h, axis=2, keep_dims=True) + 0.01
+
+		# weights_w = (weights_w - w_min)/w_max
+		# weights_h = (weights_h - h_min)/h_max
+
+		weights_w = tf.nn.sigmoid(weights_w)
+		weights_h = tf.nn.sigmoid(weights_h)
+
+		tf.summary.histogram(name=weights_w.name, values=weights_w)
+		tf.summary.histogram(name=weights_h.name, values=weights_h)
+
+		# x = tf.Print(x, [weights_w, weights_h], summarize=30)
 
 		if one_c:
 			weights_w = tf.tile(weights_w, [1, x_shape[1], 1])
 			weights_h = tf.tile(weights_h, [1, x_shape[1], 1])
 
 		# weights_w = tf.Print(weights_w, [weights_w], summarize=32)
-		# tf.add_to_collection('70f92c137c01d89c6477c5ef22411bfe', [weights_w, weights_h])
+		tf.add_to_collection('70f92c137c01d89c6477c5ef22411bfe', [weights_w, weights_h])
 
 		x = batch_bilinear(x, weights_w, weights_h)
 		x = cl.conv2d(x, num_outputs=num_outputs, kernel_size=kernel_size, stride=stride,

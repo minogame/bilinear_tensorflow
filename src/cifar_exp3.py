@@ -1,6 +1,6 @@
 import sys
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = '3'
+os.environ["CUDA_VISIBLE_DEVICES"] = '1'
 import numpy as np
 np.set_printoptions(precision=4, suppress=True, linewidth=100)
 import re
@@ -19,11 +19,23 @@ cifar10_Y = to_categorical(cifar10_Y, 10)
 X_test = np.transpose(X_test, [0,3,1,2])
 Y_test = to_categorical(Y_test, 10)
 
-cnn = trash_cnn_cifar
+cnn = trash_cnn_cifar(name='aaaa')
 # cnn = resnet('resnet', 5, grid=True)
 WEIGHT_DECAY = 1e-4
 l2 = cl.l2_regularizer(WEIGHT_DECAY)
 batch_size = 100
+
+import logging
+logging.basicConfig(filename='textlog.log',
+														filemode='a',
+														format='%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s',
+														datefmt='%H:%M:%S',
+														level=logging.DEBUG)
+console = logging.StreamHandler()
+console.setLevel(logging.INFO)
+formatter = logging.Formatter('%(name)-4s: %(levelname)-8s %(message)s')
+console.setFormatter(formatter)
+logging.getLogger('').addHandler(console)
 
 with tf.Graph().as_default():
 	X = tf.placeholder(shape=(batch_size, 3, 32, 32), dtype=tf.float32)
@@ -40,7 +52,7 @@ with tf.Graph().as_default():
 
 	XX = tf.cond(is_training, lambda: aug_image(X), lambda: X)
 
-	logits = cnn(XX, name='aaaa', is_training=is_training)
+	logits = cnn(XX, is_training=is_training)
 
 	clf_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=Y))
 
@@ -48,7 +60,7 @@ with tf.Graph().as_default():
 	for v in tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES):
 		if re.search('weights', v.name):
 			reg_loss_list.append(l2(v))
-			print ('Apply {} for {}'.format(l2.__name__, v.name))
+			logging.info('Apply {} for {}'.format(l2.__name__, v.name))
 	reg_loss = tf.add_n(reg_loss_list) if reg_loss_list else tf.contant(0.0, dtype=tf.float32)
 
 	loss = clf_loss + reg_loss
@@ -106,21 +118,21 @@ with tf.Graph().as_default():
 					iters = i + epoch*total_batch
 					summary_writer.add_summary(merged, iters)
 					summary_writer.add_run_metadata(run_metadata, 'metadata {}'.format(iters), iters)
-					print("Epoch:", '%03d' % (epoch+1), "Step:", '%03d' % i, "Loss:", str(cost))
-					if i % 499 == 0:
-						np.save(npy_dir+'{}_{}_w'.format(epoch, i), _cw)
-						np.save(npy_dir+'{}_{}_h'.format(epoch, i), _ch)
-						np.save(npy_dir+'{}_{}_i'.format(epoch, i), batch_xs)
+					logging.info('Epoch: {0:03d} Step: {1:03d} Loss: {2}'.format((epoch+1), i, cost))
+					# if i % 499 == 0:
+					# 	np.save(npy_dir+'{}_{}_w'.format(epoch, i), _cw)
+					# 	np.save(npy_dir+'{}_{}_h'.format(epoch, i), _ch)
+					# 	np.save(npy_dir+'{}_{}_i'.format(epoch, i), batch_xs)
+				
 					sess.run(train_op_grid, feed_dict={X: batch_xs, Y: batch_ys, is_training: True})
 
 				else:
-					sess.run(train_op_conv, feed_dict={X: batch_xs, Y: batch_ys, is_training: True})
-					sess.run(train_op_grid, feed_dict={X: batch_xs, Y: batch_ys, is_training: True})
-
+					sess.run([train_op_conv, train_op_grid], feed_dict={X: batch_xs, Y: batch_ys, is_training: True})
+					
 			for j in range(100):
 				batch_xs, batch_ys = X_test[100*j:100*(j+1)], Y_test[100*j:100*(j+1)]
 				acc, _loss = sess.run([accuracy, clf_loss], feed_dict={X: batch_xs, Y: batch_ys, is_training: False})
 
 				avg_acc += acc/100
 				avg_loss += _loss/100
-			print ('Acc = {}, Loss = {}'.format(avg_acc, avg_loss))
+			logging.info('Acc = {}, Loss = {}'.format(avg_acc, avg_loss))

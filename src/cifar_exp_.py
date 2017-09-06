@@ -19,7 +19,20 @@ cifar10_Y = to_categorical(cifar10_Y, 10)
 X_test = np.transpose(X_test, [0,3,1,2])
 Y_test = to_categorical(Y_test, 10)
 
-cnn = normal_cnn_cifar
+
+import logging
+logging.basicConfig(filename='textlog_normal.log',
+														filemode='a',
+														format='%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s',
+														datefmt='%H:%M:%S',
+														level=logging.DEBUG)
+console = logging.StreamHandler()
+console.setLevel(logging.INFO)
+formatter = logging.Formatter('%(name)-4s: %(levelname)-8s %(message)s')
+console.setFormatter(formatter)
+logging.getLogger('').addHandler(console)
+
+cnn = normal_cnn_cifar(name='aaaa')
 # cnn = resnet('resnet', 5, grid=False)
 WEIGHT_DECAY = 1e-4
 l2 = cl.l2_regularizer(WEIGHT_DECAY)
@@ -40,7 +53,7 @@ with tf.Graph().as_default():
 
 	XX = tf.cond(is_training, lambda: aug_image(X), lambda: X)
 
-	logits = cnn(XX, name='aaaa', is_training=is_training)
+	logits = cnn(XX, is_training=is_training)
 
 	clf_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=Y))
 
@@ -48,7 +61,7 @@ with tf.Graph().as_default():
 	for v in tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES):
 		if re.search('weights', v.name):
 			reg_loss_list.append(l2(v))
-			print ('Apply {} for {}'.format(l2.__name__, v.name))
+			logging.info('Apply {} for {}'.format(l2.__name__, v.name))
 	reg_loss = tf.add_n(reg_loss_list) if reg_loss_list else tf.contant(0.0, dtype=tf.float32)
 
 	loss = clf_loss + reg_loss
@@ -71,9 +84,12 @@ with tf.Graph().as_default():
 		tf.summary.scalar(name='reg_loss', tensor=reg_loss)
 	merged_all = tf.summary.merge_all()
 
+	saver = tf.train.Saver(max_to_keep=None)
+
 	with tf.Session() as sess:
 		sess.run(tf.global_variables_initializer())
 		log_dir = 'log/' + cnn.__name__
+		ckpt_dir = 'ckpt/' + cnn.__name__
 		summary_writer = tf.summary.FileWriter(log_dir, sess.graph)
 
 		run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
@@ -96,7 +112,7 @@ with tf.Graph().as_default():
 					iters = i + epoch*total_batch
 					summary_writer.add_summary(merged, iters)
 					summary_writer.add_run_metadata(run_metadata, 'metadata {}'.format(iters), iters)
-					print("Epoch:", '%03d' % (epoch+1), "Step:", '%03d' % i, "Loss:", str(cost))
+					logging.info('Epoch: {0:03d} Step: {1:03d} Loss: {2}'.format((epoch+1), i, cost))
 				else:
 					sess.run(train_op, feed_dict={X: batch_xs, Y: batch_ys, is_training: True})
 
@@ -106,4 +122,6 @@ with tf.Graph().as_default():
 
 				avg_acc += acc/100
 				avg_loss += _loss/100
-			print ('Acc = {}, Loss = {}'.format(avg_acc, avg_loss))
+			logging.info('Acc = {}, Loss = {}'.format(avg_acc, avg_loss))
+
+		saver.save(sess, os.path.join(ckpt_dir, 'epoch'), global_step=epoch)

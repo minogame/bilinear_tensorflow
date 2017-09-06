@@ -2,94 +2,110 @@ import tensorflow as tf
 import tensorflow.contrib.layers as cl
 
 from gridconv_v3 import gridconv2d
+from utils import log_weights
 
 # # # # # # # # # CIFAR # # # # # # # # #
 
-def normal_cnn_cifar(x, name, is_training, reuse=False):
-	# The network is built based on 'NCHW'.
-	bn_params = {'is_training':is_training, 'fused': True, 'data_format': 'NCHW'}
+# The network is built based on 'NCHW'.
+def normal_cnn_cifar(name, reuse=False):
 
-	with tf.variable_scope(name, reuse=reuse):
-		x = cl.conv2d(x, num_outputs=32, kernel_size=[3, 3], stride=1, 
-									activation_fn=tf.nn.relu, padding='SAME', data_format='NCHW',
-									normalizer_fn=cl.batch_norm, normalizer_params=bn_params,
-									scope='Conv1_1')
-		x = cl.conv2d(x, num_outputs=32, kernel_size=[3, 3], stride=1, 
-									activation_fn=tf.nn.relu, padding='SAME', data_format='NCHW',
-									normalizer_fn=cl.batch_norm, normalizer_params=bn_params,
-									scope='Conv1_2')
-		x = cl.max_pool2d(x, kernel_size=3, stride=2, data_format='NCHW')
+	@log_weights
+	def normal_cnn(x, is_training):
+		bn_params = {'is_training':is_training, 'fused': True, 'data_format': 'NCHW'}
+		with tf.variable_scope(name, reuse=reuse):
+			x = cl.conv2d(x, num_outputs=32, kernel_size=[3, 3], stride=1, 
+										activation_fn=tf.nn.relu, padding='SAME', data_format='NCHW',
+										normalizer_fn=cl.batch_norm, normalizer_params=bn_params,
+										scope='Conv1_1')
+			x = cl.conv2d(x, num_outputs=32, kernel_size=[3, 3], stride=1, 
+										activation_fn=tf.nn.relu, padding='SAME', data_format='NCHW',
+										normalizer_fn=cl.batch_norm, normalizer_params=bn_params,
+										scope='Conv1_2')
+			x = cl.max_pool2d(x, kernel_size=3, stride=2, data_format='NCHW', padding='SAME')
 
-		x = cl.conv2d(x, num_outputs=64, kernel_size=[3, 3], stride=1, 
-									activation_fn=tf.nn.relu, padding='SAME', data_format='NCHW',
-									normalizer_fn=cl.batch_norm, normalizer_params=bn_params,
-									scope='Conv2_1')
-		x = cl.conv2d(x, num_outputs=64, kernel_size=[3, 3], stride=1, 
-									activation_fn=tf.nn.relu, padding='SAME', data_format='NCHW',
-									normalizer_fn=cl.batch_norm, normalizer_params=bn_params,
-									scope='Conv2_2')
-		x = cl.max_pool2d(x, kernel_size=3, stride=2, data_format='NCHW')
+			x = cl.conv2d(x, num_outputs=64, kernel_size=[3, 3], stride=1, 
+										activation_fn=tf.nn.relu, padding='SAME', data_format='NCHW',
+										normalizer_fn=cl.batch_norm, normalizer_params=bn_params,
+										scope='Conv2_1')
+			x = cl.conv2d(x, num_outputs=64, kernel_size=[3, 3], stride=1, 
+										activation_fn=tf.nn.relu, padding='SAME', data_format='NCHW',
+										normalizer_fn=cl.batch_norm, normalizer_params=bn_params,
+										scope='Conv2_2')
+			x = cl.conv2d(x, num_outputs=64, kernel_size=[3, 3], stride=1, 
+										activation_fn=tf.nn.relu, padding='SAME', data_format='NCHW',
+										normalizer_fn=cl.batch_norm, normalizer_params=bn_params,
+										scope='Conv2_3')
+			x = cl.max_pool2d(x, kernel_size=3, stride=2, data_format='NCHW', padding='SAME')
 
-		x = cl.conv2d(x, num_outputs=128, kernel_size=[3, 3], stride=1, 
-									activation_fn=tf.nn.relu, padding='SAME', data_format='NCHW',
-									normalizer_fn=cl.batch_norm, normalizer_params=bn_params,
-									scope='Conv3_1')
-		x = cl.conv2d(x, num_outputs=128, kernel_size=[3, 3], stride=1, 
-									activation_fn=tf.nn.relu, padding='SAME', data_format='NCHW',
-									normalizer_fn=cl.batch_norm, normalizer_params=bn_params,
-									scope='Conv3_2')
-		x = tf.reduce_mean(x, [2, 3])
-		x = cl.fully_connected(x, num_outputs=10, activation_fn=None)
+			x = cl.conv2d(x, num_outputs=128, kernel_size=[3, 3], stride=1, 
+										activation_fn=tf.nn.relu, padding='SAME', data_format='NCHW',
+										normalizer_fn=cl.batch_norm, normalizer_params=bn_params,
+										scope='Conv3_1')
+			x = cl.conv2d(x, num_outputs=128, kernel_size=[3, 3], stride=1, 
+										activation_fn=tf.nn.relu, padding='SAME', data_format='NCHW',
+										normalizer_fn=cl.batch_norm, normalizer_params=bn_params,
+										scope='Conv3_2')
+			x = cl.conv2d(x, num_outputs=128, kernel_size=[3, 3], stride=1, 
+										activation_fn=tf.nn.relu, padding='SAME', data_format='NCHW',
+										normalizer_fn=cl.batch_norm, normalizer_params=bn_params,
+										scope='Conv3_3')
+			x = tf.reduce_mean(x, [2, 3])
+			x = cl.fully_connected(x, num_outputs=10, activation_fn=None)
 
-	return x
+			return x
+	return normal_cnn
 
 
-def trash_cnn_cifar(x, name, is_training, reuse=False):
-	# The network is built based on 'NCHW'.
-	bn_params = {'is_training':is_training, 'fused': True, 'data_format': 'NCHW'}
+# The network is built based on 'NCHW'.
+def trash_cnn_cifar(name, reuse=False):
 
-	with tf.variable_scope(name, reuse=reuse):
-		# x = gridconv2d(x, scope='Conv1_1', num_outputs=32, kernel_size=[3, 3], stride=1, 
-		# 							activation_fn=tf.nn.relu, padding='SAME', data_format='NCHW',
-		# 							normalizer_fn=cl.batch_norm, normalizer_params=bn_params)
-		# x = gridconv2d(x, scope='Conv1_2', num_outputs=32, kernel_size=[3, 3], stride=1, 
-		# 							activation_fn=tf.nn.relu, padding='SAME', data_format='NCHW',
-		# 							normalizer_fn=cl.batch_norm, normalizer_params=bn_params)
-		# x = cl.max_pool2d(x, kernel_size=3, stride=2, data_format='NCHW')
-		x = cl.conv2d(x, num_outputs=32, kernel_size=[3, 3], stride=1, 
-									activation_fn=tf.nn.relu, padding='SAME', data_format='NCHW',
-									normalizer_fn=cl.batch_norm, normalizer_params=bn_params,
-									scope='Conv1_1')
-		x = cl.conv2d(x, num_outputs=32, kernel_size=[3, 3], stride=1, 
-									activation_fn=tf.nn.relu, padding='SAME', data_format='NCHW',
-									normalizer_fn=cl.batch_norm, normalizer_params=bn_params,
-									scope='Conv1_2')
-		x = cl.max_pool2d(x, kernel_size=3, stride=2, data_format='NCHW')
+	@log_weights
+	def trash_cnn(x, is_training):
+		bn_params = {'is_training':is_training, 'fused': True, 'data_format': 'NCHW'}
 
-		x = gridconv2d(x, scope='Conv2_1', num_outputs=64, kernel_size=[3, 3], stride=1, 
-									activation_fn=tf.nn.relu, padding='SAME', data_format='NCHW',
-									normalizer_fn=cl.batch_norm, normalizer_params=bn_params)
-		x = gridconv2d(x, scope='Conv2_2', num_outputs=64, kernel_size=[3, 3], stride=1, 
-									activation_fn=tf.nn.relu, padding='SAME', data_format='NCHW',
-									normalizer_fn=cl.batch_norm, normalizer_params=bn_params)
-		x = gridconv2d(x, scope='Conv2_3', num_outputs=64, kernel_size=[3, 3], stride=1, 
-									activation_fn=tf.nn.relu, padding='SAME', data_format='NCHW',
-									normalizer_fn=cl.batch_norm, normalizer_params=bn_params)
-		x = cl.max_pool2d(x, kernel_size=3, stride=2, data_format='NCHW')
+		with tf.variable_scope(name, reuse=reuse):
+			# x = gridconv2d(x, scope='Conv1_1', num_outputs=32, kernel_size=[3, 3], stride=1, 
+			# 							activation_fn=tf.nn.relu, padding='SAME', data_format='NCHW',
+			# 							normalizer_fn=cl.batch_norm, normalizer_params=bn_params)
+			# x = gridconv2d(x, scope='Conv1_2', num_outputs=32, kernel_size=[3, 3], stride=1, 
+			# 							activation_fn=tf.nn.relu, padding='SAME', data_format='NCHW',
+			# 							normalizer_fn=cl.batch_norm, normalizer_params=bn_params)
+			# x = cl.max_pool2d(x, kernel_size=3, stride=2, data_format='NCHW')
+			x = cl.conv2d(x, num_outputs=32, kernel_size=[3, 3], stride=1, 
+										activation_fn=tf.nn.relu, padding='SAME', data_format='NCHW',
+										normalizer_fn=cl.batch_norm, normalizer_params=bn_params,
+										scope='Conv1_1')
+			x = cl.conv2d(x, num_outputs=32, kernel_size=[3, 3], stride=1, 
+										activation_fn=tf.nn.relu, padding='SAME', data_format='NCHW',
+										normalizer_fn=cl.batch_norm, normalizer_params=bn_params,
+										scope='Conv1_2')
+			x = cl.max_pool2d(x, kernel_size=3, stride=2, data_format='NCHW', padding='SAME')
 
-		x = gridconv2d(x, scope='Conv3_1', num_outputs=128, kernel_size=[3, 3], stride=1, 
-									activation_fn=tf.nn.relu, padding='SAME', data_format='NCHW',
-									normalizer_fn=cl.batch_norm, normalizer_params=bn_params)
-		x = gridconv2d(x, scope='Conv3_2', num_outputs=128, kernel_size=[3, 3], stride=1, 
-									activation_fn=tf.nn.relu, padding='SAME', data_format='NCHW',
-									normalizer_fn=cl.batch_norm, normalizer_params=bn_params)
-		x = gridconv2d(x, scope='Conv3_3', num_outputs=128, kernel_size=[3, 3], stride=1, 
-									activation_fn=tf.nn.relu, padding='SAME', data_format='NCHW',
-									normalizer_fn=cl.batch_norm, normalizer_params=bn_params)
-		x = tf.reduce_mean(x, [2, 3])
-		x = cl.fully_connected(x, num_outputs=10, activation_fn=None)
+			x = gridconv2d(x, scope='Conv2_1', num_outputs=64, kernel_size=[3, 3], stride=1, 
+										activation_fn=tf.nn.relu, padding='SAME', data_format='NCHW',
+										normalizer_fn=cl.batch_norm, normalizer_params=bn_params)
+			x = gridconv2d(x, scope='Conv2_2', num_outputs=64, kernel_size=[3, 3], stride=1, 
+										activation_fn=tf.nn.relu, padding='SAME', data_format='NCHW',
+										normalizer_fn=cl.batch_norm, normalizer_params=bn_params)
+			x = gridconv2d(x, scope='Conv2_3', num_outputs=64, kernel_size=[3, 3], stride=1, 
+										activation_fn=tf.nn.relu, padding='SAME', data_format='NCHW',
+										normalizer_fn=cl.batch_norm, normalizer_params=bn_params)
+			x = cl.max_pool2d(x, kernel_size=3, stride=2, data_format='NCHW', padding='SAME')
 
-	return x
+			x = gridconv2d(x, scope='Conv3_1', num_outputs=128, kernel_size=[3, 3], stride=1, 
+										activation_fn=tf.nn.relu, padding='SAME', data_format='NCHW',
+										normalizer_fn=cl.batch_norm, normalizer_params=bn_params)
+			x = gridconv2d(x, scope='Conv3_2', num_outputs=128, kernel_size=[3, 3], stride=1, 
+										activation_fn=tf.nn.relu, padding='SAME', data_format='NCHW',
+										normalizer_fn=cl.batch_norm, normalizer_params=bn_params)
+			x = gridconv2d(x, scope='Conv3_3', num_outputs=128, kernel_size=[3, 3], stride=1, 
+										activation_fn=tf.nn.relu, padding='SAME', data_format='NCHW',
+										normalizer_fn=cl.batch_norm, normalizer_params=bn_params)
+			x = tf.reduce_mean(x, [2, 3])
+			x = cl.fully_connected(x, num_outputs=10, activation_fn=None)
+
+			return x
+	return trash_cnn
 
 # # # # # # # # # CIFAR RESNET # # # # # # # # #
 def residual(name, l, is_training, increase_dim=False, first=False):
