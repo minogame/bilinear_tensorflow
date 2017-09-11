@@ -1,13 +1,13 @@
 import sys
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = '1'
+os.environ["CUDA_VISIBLE_DEVICES"] = '2'
 import numpy as np
 np.set_printoptions(precision=4, suppress=True, linewidth=100)
 import re
 
 import tensorflow as tf
 import tensorflow.contrib.layers as cl
-from model import normal_cnn_cifar
+from model import deform_cnn_cifar
 
 # Data loading and preprocessing
 import tflearn
@@ -19,9 +19,17 @@ cifar10_Y = to_categorical(cifar10_Y, 10)
 X_test = np.transpose(X_test, [0,3,1,2])
 Y_test = to_categorical(Y_test, 10)
 
+cnn = deform_cnn_cifar(name='aaaa')
+# cnn = resnet('resnet', 5, grid=True)
+WEIGHT_DECAY = 1e-4
+l2 = cl.l2_regularizer(WEIGHT_DECAY)
+l2_large = cl.l2_regularizer(1e-1)
+batch_size = 100
+
+run_id = 'a'
 
 import logging
-logging.basicConfig(filename='textlog_normal.log',
+logging.basicConfig(filename='textlog_deform_{}.log'.format(run_id),
 														filemode='a',
 														format='%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s',
 														datefmt='%H:%M:%S',
@@ -31,12 +39,6 @@ console.setLevel(logging.INFO)
 formatter = logging.Formatter('%(name)-4s: %(levelname)-8s %(message)s')
 console.setFormatter(formatter)
 logging.getLogger('').addHandler(console)
-
-cnn = normal_cnn_cifar(name='aaaa')
-# cnn = resnet('resnet', 5, grid=False)
-WEIGHT_DECAY = 1e-4
-l2 = cl.l2_regularizer(WEIGHT_DECAY)
-batch_size = 100
 
 with tf.Graph().as_default():
 	X = tf.placeholder(shape=(batch_size, 3, 32, 32), dtype=tf.float32)
@@ -60,20 +62,34 @@ with tf.Graph().as_default():
 	reg_loss_list = []
 	for v in tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES):
 		if re.search('weights', v.name):
-			reg_loss_list.append(l2(v))
+			if re.search('GRID', v.name):
+				reg_loss_list.append(l2_large(v))
+			else:
+				reg_loss_list.append(l2(v))
 			logging.info('Apply {} for {}'.format(l2.__name__, v.name))
 	reg_loss = tf.add_n(reg_loss_list) if reg_loss_list else tf.contant(0.0, dtype=tf.float32)
 
 	loss = clf_loss + reg_loss
 
-	# weights_check = tf.get_collection('70f92c137c01d89c6477c5ef22411bfe')
-	# asdf0001 = weights_check[0][0]
-	# loss = tf.Print(loss, [asdf0001], summarize=32)
+	coords_check = tf.get_collection('70f92c137c01d89c6477c5ef22411bfe')
+	coords = coords_check[0]
 
-	opt = tf.train.MomentumOptimizer(learning_rate=lr, momentum=0.9, use_nesterov=True)
+	# feature_check = tf.get_collection('b3e772b961cd049ea1c573ba97744075')
+	# feature_b = feature_check[0][0]
+	# feature_a = feature_check[0][1]
+
+	grid_weights = []
+	for v in tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES):
+		if re.search('GRID', v.name):
+			grid_weights.append(v)
+	convbn_weights = [v for v in tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES) if v not in grid_weights]
+
+	opt_conv = tf.train.MomentumOptimizer(learning_rate=lr, momentum=0.9, use_nesterov=True)
+	# opt_grid = tf.train.MomentumOptimizer(learning_rate=lr*0.05, momentum=0.9, use_nesterov=True)
 	update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
 	with tf.control_dependencies(update_ops):
-		train_op = opt.minimize(loss)
+		train_op_conv = opt_conv.minimize(loss)
+		# train_op_grid = opt_grid.minimize(loss, var_list=grid_weights)
 
 	accuracy = tf.reduce_mean(
 			tf.cast(tf.equal(tf.argmax(logits, 1), tf.argmax(Y, 1)), tf.float32),
@@ -83,19 +99,21 @@ with tf.Graph().as_default():
 		tf.summary.scalar(name='clf_loss', tensor=clf_loss)
 		tf.summary.scalar(name='reg_loss', tensor=reg_loss)
 
+	with tf.name_scope('grid_summary'):
+		for v in grid_weights:
+			tf.summary.histogram(name=v.name, values=v)
 
-	with tf.name_scope('gradient'):
-		dl_dxx = tf.gradients(loss, XX)[0]
-		tf.summary.histogram(name=dl_dxx.name, values=dl_dxx)
-		
+	with tf.name_scope('conv_summary'):
+		for v in convbn_weights:
+			tf.summary.histogram(name=v.name, values=v)
+
 	merged_all = tf.summary.merge_all()
-
-	saver = tf.train.Saver(max_to_keep=None)
-
 	with tf.Session() as sess:
 		sess.run(tf.global_variables_initializer())
-		log_dir = 'log/' + cnn.__name__
-		ckpt_dir = 'ckpt/' + cnn.__name__
+		log_dir = 'log/' + cnn.__name__ + run_id
+		npy_dir = 'npy/' + cnn.__name__ + run_id + '/'
+		if not os.path.exists(npy_dir): os.makedirs(npy_dir)
+
 		summary_writer = tf.summary.FileWriter(log_dir, sess.graph)
 
 		run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
@@ -114,13 +132,28 @@ with tf.Graph().as_default():
 				batch_xs, batch_ys = cifar10_X[batch_size*i:batch_size*(i+1)], cifar10_Y[batch_size*i:batch_size*(i+1)]
 
 				if i % 100 == 0:
-					merged, _, cost = sess.run([merged_all, train_op, clf_loss], feed_dict={X: batch_xs, Y: batch_ys, is_training: True})
+					merged, _, cost = sess.run([merged_all, train_op_conv, clf_loss], feed_dict={X: batch_xs, Y: batch_ys, is_training: True})
 					iters = i + epoch*total_batch
 					summary_writer.add_summary(merged, iters)
 					summary_writer.add_run_metadata(run_metadata, 'metadata {}'.format(iters), iters)
 					logging.info('Epoch: {0:03d} Step: {1:03d} Loss: {2}'.format((epoch+1), i, cost))
+
+					if i == 0:
+						_coords = sess.run(coords, feed_dict={X: batch_xs, Y: batch_ys, is_training: True})
+						np.save(npy_dir+'{}_{}_c'.format(epoch, i), _coords)
+					# 	np.save(npy_dir+'{}_{}_h'.format(epoch, i), _ch)
+						np.save(npy_dir+'{}_{}_i'.format(epoch, i), batch_xs)
+					# 	np.save(npy_dir+'{}_{}_fb'.format(epoch, i), _fb)
+					# 	np.save(npy_dir+'{}_{}_fa'.format(epoch, i), _fa)
+
 				else:
-					sess.run(train_op, feed_dict={X: batch_xs, Y: batch_ys, is_training: True})
+					sess.run(train_op_conv, feed_dict={X: batch_xs, Y: batch_ys, is_training: True})
+
+				# if epoch == 9 and i == 499:
+				# 	_cw, _ch = sess.run([coords_w, coords_h], feed_dict={X: batch_xs, Y: batch_ys, is_training: True})
+				# 	np.save(npy_dir+'{}_{}_w'.format(epoch, i), _cw)
+				# 	np.save(npy_dir+'{}_{}_h'.format(epoch, i), _ch)
+				# 	np.save(npy_dir+'{}_{}_i'.format(epoch, i), batch_xs)
 
 			for j in range(100):
 				batch_xs, batch_ys = X_test[100*j:100*(j+1)], Y_test[100*j:100*(j+1)]
@@ -129,5 +162,3 @@ with tf.Graph().as_default():
 				avg_acc += acc/100
 				avg_loss += _loss/100
 			logging.info('Acc = {}, Loss = {}'.format(avg_acc, avg_loss))
-
-		saver.save(sess, os.path.join(ckpt_dir, 'epoch'), global_step=epoch)

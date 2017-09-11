@@ -23,6 +23,8 @@ def batch_bilinear(x, weights_w, weights_h):
 	# coords_h: [ batch_size, channels, height ]
 	coords_w = weights_to_coords(weights_w)
 	coords_h = weights_to_coords(weights_h)
+	coords_w = tf.identity(coords_w, name='coords_w')
+	coords_h = tf.identity(coords_h, name='coords_h')
 	tf.add_to_collection('70f92c137c01d89c6477c5ef22411bfe', [coords_w, coords_h])
 
 	# idx__ : [ batch_size, channels, _, 2 ], 2 = (#batch, #channel)
@@ -104,8 +106,8 @@ def gridconv2d( x, scope,
 		# weights_w = (weights_w - w_min)/w_max
 		# weights_h = (weights_h - h_min)/h_max
 
-		weights_w = tf.nn.sigmoid(weights_w)
-		weights_h = tf.nn.sigmoid(weights_h)
+		weights_w = tf.reciprocal(tf.abs(weights_w)+1)
+		weights_h = tf.reciprocal(tf.abs(weights_h)+1)
 
 		tf.summary.histogram(name=weights_w.name, values=weights_w)
 		tf.summary.histogram(name=weights_h.name, values=weights_h)
@@ -117,12 +119,21 @@ def gridconv2d( x, scope,
 			weights_h = tf.tile(weights_h, [1, x_shape[1], 1])
 
 		# weights_w = tf.Print(weights_w, [weights_w], summarize=32)
-		tf.add_to_collection('70f92c137c01d89c6477c5ef22411bfe', [weights_w, weights_h])
+		# tf.add_to_collection('70f92c137c01d89c6477c5ef22411bfe', [weights_w, weights_h])
 
-		x = batch_bilinear(x, weights_w, weights_h)
-		x = cl.conv2d(x, num_outputs=num_outputs, kernel_size=kernel_size, stride=stride,
+		x_b = tf.expand_dims(tf.transpose(x, [0, 2, 3, 1])[:,:,:,0], -1)
+		xx = batch_bilinear(x, weights_w, weights_h)
+		x_a = tf.expand_dims(tf.transpose(x, [0, 2, 3, 1])[:,:,:,0], -1)
+
+		x = tf.identity(x, name='before')
+		xx = tf.identity(xx, name='after')
+		tf.add_to_collection('b3e772b961cd049ea1c573ba97744075', [x, xx])
+
+		xx = cl.conv2d(xx, num_outputs=num_outputs, kernel_size=kernel_size, stride=stride,
 									activation_fn=activation_fn, padding=padding,
 									normalizer_fn=normalizer_fn, normalizer_params=normalizer_params,
 									weights_initializer=weights_initializer, data_format='NCHW', scope='MAIN')
 
-		return x
+		tf.summary.image('before', x_b)
+		tf.summary.image('after', x_a)
+		return xx

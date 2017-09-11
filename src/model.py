@@ -2,6 +2,7 @@ import tensorflow as tf
 import tensorflow.contrib.layers as cl
 
 from gridconv_v3 import gridconv2d
+from deformconv import deformconv2d
 from utils import log_weights
 
 # # # # # # # # # CIFAR # # # # # # # # #
@@ -106,6 +107,57 @@ def trash_cnn_cifar(name, reuse=False):
 
 			return x
 	return trash_cnn
+
+# The network is built based on 'NCHW'.
+def deform_cnn_cifar(name, reuse=False):
+
+	@log_weights
+	def deform_cnn(x, is_training):
+		bn_params = {'is_training':is_training, 'fused': True, 'data_format': 'NCHW'}
+
+		with tf.variable_scope(name, reuse=reuse):
+			# x = gridconv2d(x, scope='Conv1_1', num_outputs=32, kernel_size=[3, 3], stride=1, 
+			# 							activation_fn=tf.nn.relu, padding='SAME', data_format='NCHW',
+			# 							normalizer_fn=cl.batch_norm, normalizer_params=bn_params)
+			# x = gridconv2d(x, scope='Conv1_2', num_outputs=32, kernel_size=[3, 3], stride=1, 
+			# 							activation_fn=tf.nn.relu, padding='SAME', data_format='NCHW',
+			# 							normalizer_fn=cl.batch_norm, normalizer_params=bn_params)
+			# x = cl.max_pool2d(x, kernel_size=3, stride=2, data_format='NCHW')
+			x = cl.conv2d(x, num_outputs=32, kernel_size=[3, 3], stride=1, 
+										activation_fn=tf.nn.relu, padding='SAME', data_format='NCHW',
+										normalizer_fn=cl.batch_norm, normalizer_params=bn_params,
+										scope='Conv1_1')
+			x = cl.conv2d(x, num_outputs=32, kernel_size=[3, 3], stride=1, 
+										activation_fn=tf.nn.relu, padding='SAME', data_format='NCHW',
+										normalizer_fn=cl.batch_norm, normalizer_params=bn_params,
+										scope='Conv1_2')
+			x = cl.max_pool2d(x, kernel_size=3, stride=2, data_format='NCHW', padding='SAME')
+
+			x = deformconv2d(x, scope='Conv2_1', num_outputs=64, kernel_size=[3, 3], stride=1, 
+										activation_fn=tf.nn.relu, padding='SAME', data_format='NCHW',
+										normalizer_fn=cl.batch_norm, normalizer_params=bn_params)
+			x = deformconv2d(x, scope='Conv2_2', num_outputs=64, kernel_size=[3, 3], stride=1, 
+										activation_fn=tf.nn.relu, padding='SAME', data_format='NCHW',
+										normalizer_fn=cl.batch_norm, normalizer_params=bn_params)
+			x = deformconv2d(x, scope='Conv2_3', num_outputs=64, kernel_size=[3, 3], stride=1, 
+										activation_fn=tf.nn.relu, padding='SAME', data_format='NCHW',
+										normalizer_fn=cl.batch_norm, normalizer_params=bn_params)
+			x = cl.max_pool2d(x, kernel_size=3, stride=2, data_format='NCHW', padding='SAME')
+
+			x = deformconv2d(x, scope='Conv3_1', num_outputs=128, kernel_size=[3, 3], stride=1, 
+										activation_fn=tf.nn.relu, padding='SAME', data_format='NCHW',
+										normalizer_fn=cl.batch_norm, normalizer_params=bn_params)
+			x = deformconv2d(x, scope='Conv3_2', num_outputs=128, kernel_size=[3, 3], stride=1, 
+										activation_fn=tf.nn.relu, padding='SAME', data_format='NCHW',
+										normalizer_fn=cl.batch_norm, normalizer_params=bn_params)
+			x = deformconv2d(x, scope='Conv3_3', num_outputs=128, kernel_size=[3, 3], stride=1, 
+										activation_fn=tf.nn.relu, padding='SAME', data_format='NCHW',
+										normalizer_fn=cl.batch_norm, normalizer_params=bn_params)
+			x = tf.reduce_mean(x, [2, 3])
+			x = cl.fully_connected(x, num_outputs=10, activation_fn=None)
+
+			return x
+	return deform_cnn
 
 # # # # # # # # # CIFAR RESNET # # # # # # # # #
 def residual(name, l, is_training, increase_dim=False, first=False):

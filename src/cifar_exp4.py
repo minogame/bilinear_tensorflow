@@ -26,7 +26,7 @@ l2 = cl.l2_regularizer(WEIGHT_DECAY)
 l2_large = cl.l2_regularizer(1e-1)
 batch_size = 100
 
-run_id = 'f'
+run_id = 'h'
 
 import logging
 logging.basicConfig(filename='textlog4{}.log'.format(run_id),
@@ -44,7 +44,7 @@ with tf.Graph().as_default():
 	X = tf.placeholder(shape=(batch_size, 3, 32, 32), dtype=tf.float32)
 	Y = tf.placeholder(shape=(batch_size, 10), dtype=tf.float32)
 	is_training = tf.placeholder(shape=(), dtype=tf.bool)
-	lr = tf.Variable(0.01, name='learning_rate', trainable=False, dtype=tf.float32)
+	lr = tf.Variable(0.1, name='learning_rate', trainable=False, dtype=tf.float32)
 	decay_lr_op = tf.assign(lr, lr/10)
 
 	def aug_image(x):
@@ -74,6 +74,10 @@ with tf.Graph().as_default():
 	coords_check = tf.get_collection('70f92c137c01d89c6477c5ef22411bfe')
 	coords_w = coords_check[0][0]
 	coords_h = coords_check[0][1]
+
+	feature_check = tf.get_collection('b3e772b961cd049ea1c573ba97744075')
+	feature_b = feature_check[0][0]
+	feature_a = feature_check[0][1]
 
 	grid_weights = []
 	for v in tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES):
@@ -128,7 +132,7 @@ with tf.Graph().as_default():
 			for i in range(total_batch):
 				batch_xs, batch_ys = cifar10_X[batch_size*i:batch_size*(i+1)], cifar10_Y[batch_size*i:batch_size*(i+1)]
 
-				if i % 1 == 0:
+				if i % 100 == 0:
 					merged, _, cost = sess.run([merged_all, train_op_conv, clf_loss], feed_dict={X: batch_xs, Y: batch_ys, is_training: True})
 					iters = i + epoch*total_batch
 					summary_writer.add_summary(merged, iters)
@@ -136,15 +140,24 @@ with tf.Graph().as_default():
 					logging.info('Epoch: {0:03d} Step: {1:03d} Loss: {2}'.format((epoch+1), i, cost))
 
 					sess.run(train_op_grid, feed_dict={X: batch_xs, Y: batch_ys, is_training: True})
+
+					if i == 0:
+						_cw, _ch, _fb, _fa = sess.run([coords_w, coords_h, feature_b, feature_a], feed_dict={X: batch_xs, Y: batch_ys, is_training: True})
+						np.save(npy_dir+'{}_{}_w'.format(epoch, i), _cw)
+						np.save(npy_dir+'{}_{}_h'.format(epoch, i), _ch)
+						np.save(npy_dir+'{}_{}_i'.format(epoch, i), batch_xs)
+						np.save(npy_dir+'{}_{}_fb'.format(epoch, i), _fb)
+						np.save(npy_dir+'{}_{}_fa'.format(epoch, i), _fa)
+
 				else:
 					sess.run(train_op_conv, feed_dict={X: batch_xs, Y: batch_ys, is_training: True})
 					sess.run(train_op_grid, feed_dict={X: batch_xs, Y: batch_ys, is_training: True})
 
-				if epoch == 9 and i == 499:
-					_cw, _ch = sess.run([coords_w, coords_h], feed_dict={X: batch_xs, Y: batch_ys, is_training: True})
-					np.save(npy_dir+'{}_{}_w'.format(epoch, i), _cw)
-					np.save(npy_dir+'{}_{}_h'.format(epoch, i), _ch)
-					np.save(npy_dir+'{}_{}_i'.format(epoch, i), batch_xs)
+				# if epoch == 9 and i == 499:
+				# 	_cw, _ch = sess.run([coords_w, coords_h], feed_dict={X: batch_xs, Y: batch_ys, is_training: True})
+				# 	np.save(npy_dir+'{}_{}_w'.format(epoch, i), _cw)
+				# 	np.save(npy_dir+'{}_{}_h'.format(epoch, i), _ch)
+				# 	np.save(npy_dir+'{}_{}_i'.format(epoch, i), batch_xs)
 
 			for j in range(100):
 				batch_xs, batch_ys = X_test[100*j:100*(j+1)], Y_test[100*j:100*(j+1)]
